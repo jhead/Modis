@@ -1,5 +1,5 @@
 <?php
-namespace jhead\Redis;
+namespace jhead\Modis;
 
 class RedisDataProvider {
     

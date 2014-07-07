@@ -1,5 +1,5 @@
 <?php
-namespace jhead\Redis;
+namespace jhead\Modis;
 
 abstract class RedisModel {
 
