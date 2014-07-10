@@ -11,7 +11,7 @@ class RedisDataProvider {
      * @param array $hash_parts
      * @return array|bool attributes
      */
-    public static function attributesByHash(array $hash_parts) {
+    public static function modelAttributesByHash(array $hash_parts) {
         $hash = self::formatHash($hash_parts);
         
         if (strlen($hash) === 0) {
@@ -30,6 +30,17 @@ class RedisDataProvider {
         return $attributes;
     }
     
+    public static function saveModel(RedisModel $model) {
+        $vars = $model->fillable;
+        $hash = $model->getHash();
+        
+        foreach ($vars as $var) {
+            if ( isset($model->$var) ) {
+                \Redis::hset($hash, $var, $model->$var);
+            }
+        }
+    }
+    
     /**
      * Takes parts of a hash and combines them as a hash string, used for
      * interacting with a Redis database. The hash format defaults to
@@ -40,21 +51,22 @@ class RedisDataProvider {
      * @param string $hash_format
      * @return string $hash
      */
-    final public static function formatHash(array $parts, $hash_format = 'model:id') {
+    final public static function formatHash(array $parts, $hash_format = RedisModel::HASH_FORMAT) {
         $requires = explode(":", $hash_format);
         
         foreach ($requires as $r) {
             if ( !array_key_exists($r, $parts) ) {
-                throw new RedisHashFormatException('Missing required attributes in hash format');
+                throw new RedisHashFormatException('Missing required parameters in hash format');
             }
         }
         
         $hash = '';
         
-        $hash .= $parts['model'];
-        $hash .= ':';
-        $hash .= $parts['id'];
+        foreach ($parts as $key => $value) {
+            $hash .= $value . ':';
+        }
         
+        $hash = substr($hash, 0, strlen($hash) - 1);
         return $hash;
     }
     

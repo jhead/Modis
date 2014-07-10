@@ -3,12 +3,21 @@ namespace jhead\Modis;
 
 abstract class RedisModel {
 
-    protected $attributes = [];
-    protected $hidden = [ 'hidden', 'attributes' ];
+    const HASH_FORMAT = "model:token";
 
-    private function __construct(array $attributes = []) {
+    protected $token;
+    protected $hash;
+    protected $attributes = [];
+    
+    public $fillable = [ 'token' ];
+    protected $hidden = [ 'hidden', 'attributes', 'fillable' ];
+
+    protected function __construct(array $attributes = []) {
         $this->attributes = $attributes;
-        $this->fill( $this->attributes );
+        $this->fill($this->attributes);
+
+        $this->token = $this->getToken();
+        $this->hash = $this->getHash();        
     }
     
     /**
@@ -21,6 +30,43 @@ abstract class RedisModel {
         foreach ($attributes as $attr => $value) {
             $this->$attr = $value;
         }
+    }
+    
+    public function getVisibleAttributes() {
+        $vars = get_object_vars($this);
+        
+        foreach ($this->hidden as $attr) {
+            if ( array_key_exists($attr, $vars) ) {
+                unset($vars[$attr]);
+            }
+        }
+        
+        return $vars;
+    }
+    
+    public function save() {
+        RedisDataProvider::saveModel($this);
+    }
+    
+    public function getToken() {
+        if ( !isset($this->token) ) {
+            $this->token = $this->generateToken();
+        }
+        
+        return $this->token;
+    }
+    
+    abstract protected function generateToken();
+    
+    public function getHash() {
+        if ( !isset($this->hash) ) {
+            $this->hash = RedisDataProvider::formatHash([
+                'model' => self::sanitizeModelName( self::getModelName() ),
+                'token' => $this->token
+            ]);
+        }
+        
+        return $this->hash;
     }
     
     /**
@@ -38,32 +84,26 @@ abstract class RedisModel {
      * @return string
      */
     public function __toString() {
-        $vars = get_object_vars($this);
-        
-        foreach ($this->hidden as $attr) {
-            if ( array_key_exists($attr, $vars) ) {
-                unset($vars[$attr]);
-            }
-        }
+        $vars = $this->getVisibleAttributes();
         
         $json_output = json_encode($vars);
         return $json_output;
     }
     
     /**
-     * Searches for a model and ID combination in the Redis database
+     * Searches for a model and token combination in the Redis database
      * and returns a new instance of the model with key-value pairs
      * from the database associated with it.
      *
-     * @param int $id
+     * @param int $token
      * @return jhead\Redis\RedisModel
      */
-    public static function find($id) {
+    public static function find($token) {
         $model_name = self::getModelName();
         
-        $attributes = RedisDataProvider::attributesByHash([
+        $attributes = RedisDataProvider::modelAttributesByHash([
             'model' => self::sanitizeModelName($model_name),
-            'id' => $id
+            'token' => $token
         ]);
         
         return new $model_name($attributes);
